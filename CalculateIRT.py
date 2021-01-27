@@ -13,20 +13,7 @@ from scipy.stats import dirichlet, lognorm, norm
 from scipy.special import expit
 
 
-def clientDB(database):
-	client = MongoClient('localhost', 27017)
-	db = client[database]
-	return db
 
-def clientCT(database, collection):
-	ct = clientDB(database)[collection]
-	return ct
-			
-def columnFunc(j, k, num):
-	kList = []
-	for i in range(j,k):
-		kList.append(num)    
-	return kList 
 
 
 __all__ = ['two_parameter_model', 'four_parameter_model', 'estimate_thetas']
@@ -62,7 +49,22 @@ MAX_ITER = 100
 DIFF = 0.001
 SMALL_DIFF_STREAK = 3
 
+def clientDB(database):
+	client = MongoClient('localhost', 27017)
+	db = client[database]
+	return db
 
+def clientCT(database, collection):
+	ct = clientDB(database)[collection]
+	return ct
+			
+def columnFunc(j, k, num):
+	kList = []
+	for i in range(j,k):
+		kList.append(num)    
+	return kList 
+	
+	
 def scale_guessing(value, c, d):
 	"""
 	scale 2PL probability to fit the 4PL model.
@@ -71,6 +73,9 @@ def scale_guessing(value, c, d):
 	by `c` and `d`.
 	"""
 	return c + (d - c) * value
+
+def rasch_model(b, theta):
+	return expit( theta + array(b)) 
 
 
 def two_parameter_model(a, b, theta):
@@ -247,7 +252,8 @@ def learn_abcd(thetas, question_dist, corrects):
 			return inf
 		mult = question_dist.logpdf(a, b, c, d)
 		#p = four_parameter_model(a, b, c, d, thetas)
-		p = two_parameter_model(a, b, thetas)
+		#p = two_parameter_model(a, b, thetas)
+		p = rasch_model(b, thetas)
 		for i, correct in enumerate(corrects):
 			# correct answer is 1, incorrect by -1, no answer is 0
 			# multiply by a factor of 2 per student, to utilize log1p
@@ -269,7 +275,8 @@ def learn_theta(abcds, student_dist, corrects):
 		mult = student_dist.logpdf(theta)
 		a, b, c, d = abcds.T
 		#p = four_parameter_model(a, b, c, d, theta)
-		p = two_parameter_model(a, b, theta)
+		#p = two_parameter_model(a, b, theta)
+		p = rasch_model(b, theta)
 		for i, correct in enumerate(corrects):
 			# correct answer is 1, incorrect by -1, no answer is 0
 			# multiply by a factor of 2 per question, to utilize log1p
@@ -345,6 +352,7 @@ def question_abcd_given_theta(thetas, question_dist, scores, initial_abcd):
 	"""
 	to_minimize = learn_abcd(thetas, question_dist, scores)
 	res = minimize(to_minimize, initial_abcd, method=MINIMIZATION_METHOD)
+	print("res=", res)
 	return parse_optimization_result(res)
 
 
@@ -353,6 +361,7 @@ def all_abcds_given_theta(thetas, question_dist, scores, abcds):
 	find the maximal-likelihood question parameters, given the ability
 	and answers of all students, for all questions question
 	"""
+	print("len(abcds):", len(abcds))
 	return array([question_abcd_given_theta(thetas, question_dist,
 											scores[i], abcds[i])
 				for i in range(len(abcds))])
@@ -403,7 +412,9 @@ def estimate_thetas(scores, verbose=False):
 													question_dist)
 	small_diffs_streak = 0
 	iter_count = 0
+	
 	while iter_count < MAX_ITER and small_diffs_streak < SMALL_DIFF_STREAK:
+		start = time.time()
 		old_abcds, old_thetas = copy(abcds), copy(thetas)
 		print("start all_abcds_given_theta...") #很久
 		abcds = all_abcds_given_theta(thetas, question_dist, expanded, abcds)
@@ -419,7 +430,8 @@ def estimate_thetas(scores, verbose=False):
 		iter_count += 1
 		if verbose:
 			print(diff)
-	print('thetas:', thetas, 'abcds:', abcds)
+		print(time.time()-start, "秒")	
+	print('thetas:', thetas, "\n", 'abcds:', abcds)
 	return thetas, abcds
 	
 	
@@ -427,13 +439,33 @@ def estimate_thetas(scores, verbose=False):
 if __name__ == '__main__':
 	database = 'dotCode'
 	db = clientDB(database)
-	collection = 'FirstRecord'		
+	collection = 'Elo'		
 	ct = clientCT(database, collection)
+	db.Elo.create_index([('gameCode', 1), ('userId', 1), ('sectionId', 1)])
+	
+	maxId = 67900
+	qualify_users = []
+	for id in range(0, maxId): 
+		for one in ct.find({"gameCode":"Duck", "userId":id}):
+			if one['maxSection'] >= 8:
+				for section in range(1, one['maxSection']+1):
+					if ('section%d_elo' %section) not in one.keys():
+						break
+					if section == one['maxSection']:
+						qualify_users.append(one['userId'])
+						print(id)
+						
+						
+	#qualify_users = np.array(qualify_users)
+	print(len(qualify_users))
+	s = input("press enter to continue...")
 	
 	print("start to create index...")
+	collection = 'FirstRecord'		
+	ct = clientCT(database, collection)
 	ct.create_index([('gameCode', 1), ('userId', 1), ('sectionId', 1)])
 	print("create index completed!")
-	maxId = 6790
+
 	game = 'Duck'
 	
 	if game == 'Maze':
@@ -443,21 +475,36 @@ if __name__ == '__main__':
 	
 	answersTable = []
 	peo = 0
-	for id in range(1, maxId): 
+	for id in qualify_users: 
 		id_exists = 0
 		userAnswers = np.array(columnFunc(0, maxSection, 0))
 		#print(id)
 		for section in range(1, maxSection+1):
 			for one in ct.find({"gameCode":game, "userId":id, "sectionId":section}):
-				userAnswers[section-1] = 1 if one['gameStar'] > 0 else -1
+				if one['gameStar'] == 0:
+					userAnswers[section-1] = -1
+				elif one['gameStar'] == 1:	
+					userAnswers[section-1] = 1/3
+				elif one['gameStar'] == 2:	
+					userAnswers[section-1] = 2/3
+				elif one['gameStar'] == 3:	
+					userAnswers[section-1] = 1
+				elif one['gameStar'] == 4:
+					userAnswers[section-1] = 4/3
+				else:
+					userAnswers[section-1] = 0
 				id_exists = 1
 		if id_exists:		
 			#print(userAnswers)
+			#s = input("")
 			answersTable.append(userAnswers)
 		peo += id_exists			
 	answersTable = np.array(answersTable)
 	print("shape:", answersTable.shape)
 	#print(answersTable)
 	result_thetas, result_abcds = estimate_thetas(answersTable, verbose=True)
+	db.FirstRecord.update_one
+	
+	
 	print("peo:", peo, len(result_thetas), len(result_abcds))
 	
