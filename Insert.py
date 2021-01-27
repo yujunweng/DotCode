@@ -127,25 +127,43 @@ def Add_Difficulty(game, maxsection):
 			Difficulty_Degree.append(one['difficultyDegree'])
 	return Item_Difficulty, Difficulty_Degree
 
-if __name__ == '__main__':
-	###主程式
-	value = int(input('''(1)Insert Origianal Data or fix error time data 
-	(2)Create 3 collections - AccuTime, FirstPass, FirstRecord
-	(3)Calculate Z of accumulated time and insert Elo from Elo to AccuTime
-	(4)Calculate Z of of game time of the first record and insert Elo from Elo to FirstRecord
-	(7)Insert section statistic information to Sec_sta\n:'''))
+def descript_statis(array1, array2):
+	meanT = np.mean(array2)
+	midT = np.median(array1)
+	modT = np.argmax(np.bincount(array1))
+	minT = np.amin(array1)
+	maxT = np.amax(array1)
+	stdT = np.std(array2)
+	return meanT, midT, modT, minT, maxT, stdT
 
+def mean_and_std(array1, array2, array3):
+	meanT = np.mean(array1)
+	meanT_pass = np.mean(array2)
+	meanT_fail = np.mean(array3)
+	
+	stdT = np.std(array1)
+	stdT_pass = np.std(array2)
+	stdT_fail = np.std(array3)
+	return meanT, meanT_pass, meanT_fail, stdT, stdT_pass, stdT_fail
+
+### 主程式
+if __name__ == '__main__':
+	value = int(input('''(1)Insert Origianal Data or fix error time data 
+(2)Create 3 collections - AccuTime, FirstPass, FirstRecord
+(3)Calculate Z of accumulated time and insert Elo from Elo to AccuTime
+(4)Calculate Z of of game time of the first record and insert Elo from Elo to FirstRecord
+(7)Insert section statistic information to Sec_sta\n:'''))
+	startTime = time.time()
 
 	peo = 0 #有紀錄的玩家
 	countInsert = 0 #insert的筆數
 	gameCode = ['Maze', 'Duck']
 	degree = [-3, -2, -1, 0, 1, 2]
-
 	game = 'Duck'
-
-	##value = 1
-	#每筆資料insert
-	if value == 1:
+	maxSection = 60 if game == 'Duck' else 40
+	maxId = 679000
+	
+	if value == 1:	# 每筆資料insert
 		connection = MongoClient('localhost', 27017)
 		print(connection.list_database_names())  #Return a list of db, equal to: > show dbs
 		db = connection["DATA"]
@@ -195,10 +213,6 @@ if __name__ == '__main__':
 					addCount += 1
 					#print("正在寫入第 %d 筆資料" %addCount)
 				
-				#endTime = time.time()
-				#tran_startTime = datetime.datetime.fromtimestamp(startTime).strftime("%Y-%m-%d %H:%M:%S")
-				#tran_endTime = datetime.datetime.fromtimestamp(endTime).strftime("%Y-%m-%d %H:%M:%S")
-				
 				if addCount > 0:
 					logPath = "D:\\paper\\practice\\practice file\\record\\InsertLog.txt"
 					logContent = "開始時間：%s\n%s寫入完成!\nMaze寫入 %d 筆!\nDuck寫入 %d 筆!\n總計 %d 筆File!\n結束時間：%s\n" %(tran_startTime, collection, mazeCount, duckCount, addCount, tran_endTime)
@@ -224,12 +238,11 @@ if __name__ == '__main__':
 					db.Record.insert_many(file_data)
 			connection.close()
 		 
-
 		elif choice == 3:
-			##尋找此ID的所有遊戲紀錄，將連續的兩個遊戲紀錄的lastUpdateTime相減
-			##Find all record of this userId and subtract the lastUpdateTime of two consecutive game records
-			##算出lastUpdateTime較後面的紀錄的gameTime
-			##to calculate gameTime of later record
+			# 尋找此ID的所有遊戲紀錄，將連續的兩個遊戲紀錄的lastUpdateTime相減
+			# Find all record of this userId and subtract the lastUpdateTime of two consecutive game records
+			# 算出lastUpdateTime較後面的紀錄的gameTime
+			# to calculate gameTime of later record
 			
 			#connect to database
 			client = MongoClient()
@@ -246,13 +259,8 @@ if __name__ == '__main__':
 			if os.path.isfile(os.path.join(path, thefirstFile)):
 				os.remove(os.path.join(path, thefirstFile))
 
-			restore = 0
-			theFirst = 0
-			count = 0
-			normal = 0
-			
+			restore, theFirst, count, normal = 0
 			errorTime = []
-
 			limitTime = 1200000
 			
 			##建立索引
@@ -273,7 +281,6 @@ if __name__ == '__main__':
 			for one in ct.find({"gameCode":"Duck", "gameTime":{"$gt":limitTime}}):
 				count += 1
 				errorTime.append(one['userId'])
-			
 			
 			print("length of errorTime:", len(errorTime))
 			print("length of set errorTime", len(set(errorTime)))
@@ -348,17 +355,15 @@ if __name__ == '__main__':
 							else:
 								normal += 1				
 					'''
-					i += 1
-					
+					i += 1	
 				peo -= 1
 				print("剩下人數:", peo)
-				
+			
 			print("有問題人數:%d" %count)
 			massage = "修復筆數:%d, 無法修復:%d, 正常資料:%d" %(restore, theFirst, normal)
 			print(massage)
 			print("搜尋時間 %f秒" %(findEndTime - startTime))
 			
-		
 		elif choice == 4:
 			db = connection["dotCode"]
 			ct = db['Record']
@@ -369,41 +374,23 @@ if __name__ == '__main__':
 				post2 = {'YYMMDD':st}
 				ct.update_one({'_id':post['_id']}, {'$set':post2}, upsert=True)
 
-				
-	##value = 2
-	#創建3個主要的collection - AccuTime, FirstPass, FirstRecord
-	#AccuTime計算累計時間的正確率、log時間、Z值
-	#FirstPass每一關直到破關前的遊戲記錄
-	#FirstRecord每一關第1次遊戲的記錄
-	#upsert關卡難度
-	if(value == 2):
-		step = int(input("(1)create three collections - AccuTime, FirstPass, FirstRecord\n(2)insert item difficulty\n："))
-		startTime = time.time()
-		
-		index_flag = True
-		mode = 1 # (1)insert data (2)update data  when collection is empty, choose insert
-		
-		if(step == 1):
-			startTime = time.time()
-			print("Create 3 collections - AccuTime, FirstPass, FirstRecord")
-			  
-			database = 'dotCode'
-			collection = 'Record'
 
-			db = clientDB(database)
-			ct = clientCT(database, collection)
-			countInsert = 0
-			
-			maxId = 679000
-			
-			game = 'Duck'
-			if game == 'Maze':
-				maxSection = 40
-			elif game == 'Duck':
-				maxSection = 60
-				
+	if(value == 2):
+		#創建3個主要的collection - AccuTime, FirstPass, FirstRecord
+		#AccuTime計算累計時間的正確率、log時間、Z值
+		#FirstPass每一關直到破關前的遊戲記錄
+		#FirstRecord每一關第1次遊戲的記錄		
+		mode = 1 # (1)insert data (2)update data (attention:choose insert when collection is empty, it's much quick)
+		print("Create 3 collections - AccuTime, FirstPass, FirstRecord")
+		choice = input("是否開始?Y/N")  
+		database = 'dotCode'
+		collection = 'Record'
+		db = connection[database]
+		ct = clientCT(database, collection)
+		if choice == 'Y':
 			firstrecord_count = 0
 			accutime_count = 0	
+			
 			for section in range(1, maxSection+1):
 				print("%s section：%d" %(game, section)) 
 				for id in range(1, maxId):    
@@ -411,11 +398,7 @@ if __name__ == '__main__':
 					sortedRecord = []
 					try_count = 0   	# 嘗試破關次數
 					for one in ct.find({"gameCode":"Duck", "sectionId":section, "userId":id}):
-						if 'newGameTime' in one.keys():
-							newGameTime = one['newGameTime']
-							#print(newGameTime)
-						else:
-							newGameTime = one['gameTime']
+						newGameTime = one['newGameTime'] if 'newGameTime' in one.keys() else one['gameTime']	
 						
 						if 0 < newGameTime <= 57600000:
 							record.append([#one['gameCode'],
@@ -425,31 +408,31 @@ if __name__ == '__main__':
 										   newGameTime,
 										   one['lastUpdateTime']
 										 ])  
-					
 					len_record = len(record)
 					
 					if len_record > 0:
 						record = np.array(record)
-						Merge_Sort(record, y=5) 
+						Merge_Sort(record, y=2) 
 						
 						i = 0
 						accumulatedTime = 0            
 						while i < len_record:
 							#常用資料賦值，減少運算次數
-							star = record[i][0]
-							GameTime = record[i][1]
-							updateTime = record[i][2]
+							star = int(record[i][0])
+							GameTime = int(record[i][1])
+							updateTime = int(record[i][2])
 							try_count += 1
 							GameTime_sec = GameTime/1000
-							logGameTime_sec = np.log(GameTime_sec)
+							logGameTime_sec = float(np.log(GameTime_sec))
 							accumulatedTime += GameTime
 							accumulatedTime_sec = accumulatedTime/1000
-							logAccuTime_sec = np.log(accumulatedTime_sec)
+							logAccuTime_sec = float(np.log(accumulatedTime_sec))
 							correctPercentage = 0 if star == 0 else (1/try_count)			
+							'''
 							# FirstPass第一次過關前的所有紀錄都insert
-							firstPass_dict ={"gameCode" : game,
+							firstPass_dict =[{"gameCode" : game,
 											 "sectionId" : section,
-											 "userId" : id,
+											 "userId" : int(id),
 											 "gameStar" : star,
 											 "gameTime" : GameTime,
 											 "gameTime_sec" : GameTime_sec,
@@ -459,7 +442,14 @@ if __name__ == '__main__':
 											 "lastUpdateTime" : updateTime,
 											 "tryCount" : try_count,
 											 "correctPercentage" : correctPercentage
-											}
+											}]
+							
+							for items in firstPass_dict.items():
+								#print(items)
+								if isinstance(items[1], np.int64):
+									print(items[0])
+							s =input("")
+							
 							if mode == 1:				
 								db.FirstPass.insert_many(firstPass_dict)
 							elif mode == 2:
@@ -467,32 +457,32 @@ if __name__ == '__main__':
 							
 							# FirstRecord 只 insert 第一筆紀錄
 							if i == 0:
-								firstRecord_dict = {"gameCode":game,
+								firstRecord_dict = [{"gameCode":game,
 													"sectionId":section,
-													"userId":id,
+													"userId":int(id),
 													"gameStar":star,									  
 													"gameTime":GameTime,  #會是修正後的gameTime
 													"gameTime_sec":GameTime_sec,
 													"logGameTime_sec":logGameTime_sec,
 													"lastUpdateTime":updateTime
-													}
+													}]
 								if mode == 1:
 									db.FirstRecord.insert_many(firstRecord_dict)
 								elif mode == 2:
 									db.FirstRecord.update_one({"gameCode":game, "sectionId":section, "userId":id},{'$set':firstRecord_dict}, upsert = True)
 								firstrecord_count += 1
-							
+							'''
 							# AccuTime 只 insert 最後一筆紀錄
 							if i == (len_record-1) or star > 0:
-								wrongTime_sec = accumulatedTime-GameTime if star > 0 else accumulatedTime
+								wrongTime_sec = accumulatedTime_sec-GameTime_sec if star > 0 else accumulatedTime_sec
 								accuTime_dict =[{"gameCode" : game,
 												"sectionId" : section,
-												"userId" : id,
+												"userId" : int(id),
 												"gameStar" : star,
 												"accuTime_sec" : accumulatedTime_sec,
 												"logAccuTime_sec" : logAccuTime_sec,
-												"wrongTime_sec" : ,
-												"logwrongTime_sec" : ,
+												"wrongTime_sec" : wrongTime_sec,
+												"logwrongTime_sec" : float(np.log(wrongTime_sec)),
 												"correctPercentage" : correctPercentage,
 												"tryCount" : try_count
 											   }]
@@ -504,196 +494,135 @@ if __name__ == '__main__':
 
 								break	
 							i += 1
-					
-					#檢查筆數是否正確,firstRecord會和accutime相同	
-					if(firstrecord_count != accutime_count):
-						print("firstrecord:%d" %firstrecord_count) 
-						print("accutime:%d" %accutime_count)
-						print("lenrecord", len_record, "i =", i,  "game", game, "section", section, "user", id)
-						os.system("pause")
-				endTime = time.time()		
-				print("use time", endTime-startTime, "秒")		
-			##建立索引
-			print("start to create index")
-			db.AccuTime.create_index([('gameCode', 1), ('sectionId', 1), ('userId', 1)])
-			db.AccuTime.create_index([('sectionId', 1), ('userId', 1)])
-			db.FirstRecord.create_index([('gameCode', 1), ('sectionId', 1), ('userId', 1)])
-			db.FirstRecord.create_index([('sectionId', 1), ('userId', 1)])
-			db.FirstPass.create_index([('gameCode', 1), ('userId', 1)])
-			db.FirstPass.create_index([('gameCode', 1), ('sectionId', 1)])
-			db.FirstPass.create_index([('gameCode', 1), ('sectionId', 1), ('userId', 1)])
-			db.FirstPass.create_index([('gameCode', 1), ('sectionId', 1), ('userId', 1), ('lastUpdateTime', 1)])
-			#print("userid: %d, section : %d have insert..." %(id, section))
-			print("Indexes created!")
-
-		elif(step == 2):     
-			##insert difficulty and difficulty_degree
-			startTime = time.time()
-			database = 'dotCode'
-			collection = 'Sec_sta'
-			
-			db = clientDB(database)
-			ct = clientCT(database, collection)
-			
-			print("start to create index")
-			db.AccuTime.create_index([('gameCode', 1), ('sectionId', 1)])
-			db.FirstPass.create_index([('gameCode', 1), ('sectionId', 1)])
-			db.FirstRecord.create_index([('gameCode', 1), ('sectionId', 1)])
-			print("Indexes created!")
-
-			if game == 'Maze':
-				maxSection = 40
-			elif game == 'Duck':
-				maxSection = 60
+						#print("lenrecord", len_record, "i =", i,  "game", game, "section", section, "user", id)
 				
-			print("collect item difficulty...")
-			item_difficulty = []
-			difficulty_degree = []
-			for section in range(1, maxSection+1):
-				for item in ct.find({"gameCode":game, "sectionId":section}):
-					item_difficulty.append(item['difficulty'])
-					difficulty_degree.append(item['difficultyDegree'])
-			#print(item_difficulty)
-						
-			print("start to insert difficulty and difficulty degree")
-			difficulty_dict = {}
-			for section in range(1, maxSection+1):
-				difficulty_dict = {"difficulty" : item_difficulty[section-1],
-								   "difficultyDegree" : difficulty_degree[section-1]
-								  }
-				count_AccuTime = db.AccuTime.update_many({"gameCode":game, "sectionId":section}, {'$set':difficulty_dict}, upsert = True)
-				count_FirstPass = db.FirstPass.update_many({"gameCode":game, "sectionId":section}, {'$set':difficulty_dict}, upsert = True)
-				count_FirstRecord = db.FirstRecord.update_many({"gameCode":game, "sectionId":section}, {'$set':difficulty_dict}, upsert = True)
-				print(gameCode, "section", section, "AccuTime:", count_AccuTime.modified_count, "FirstPass:", count_FirstPass.modified_count, "FirstRecord:", count_FirstRecord.modified_count)
-				countInsert += count_AccuTime.modified_count+count_FirstPass.modified_count+count_FirstRecord.modified_count
+				#檢查筆數是否正確,FirstRecord會和AccuTime相同	
+				if(firstrecord_count != accutime_count):
+					print("firstrecord:%d" %firstrecord_count) 
+					print("accutime:%d" %accutime_count)
 
-
+				endTime = time.time()		
+				print("use time", endTime-startTime, "秒")			
+			
+		##建立索引
+		print("start to create index")
+		db.AccuTime.create_index([('gameCode', 1), ('sectionId', 1), ('userId', 1)])
+		db.FirstRecord.create_index([('gameCode', 1), ('sectionId', 1), ('userId', 1)])
+		db.FirstPass.create_index([('gameCode', 1), ('userId', 1)])
+		db.FirstPass.create_index([('gameCode', 1), ('sectionId', 1)])
+		db.FirstPass.create_index([('gameCode', 1), ('sectionId', 1), ('userId', 1)])
+		db.FirstPass.create_index([('gameCode', 1), ('sectionId', 1), ('userId', 1), ('lastUpdateTime', 1)])
+		#print("userid: %d, section : %d have insert..." %(id, section))
+		print("Indexes created!")
+			
 	if (value == 3):
-		step = int(input("(1)calaulate Z of accumulated time and log accumulated time\n(2)insert Elo from PeoElo\n："))
-		startTime = time.time()
-		
+		step = int(input('''(1)calaulate Z of accumulated time and log accumulated time\n(2)insert Elo from PeoElo\n：'''))
+		database = 'dotCode'
+		db = clientDB(database)
 		if(step == 1):
-			###first calaulate Z of accumulated time and log accumulated time
-			database = 'dotCode'
+			###calaulate Z of accumulated time and log accumulated time
 			collection = 'AccuTime'
-			db = clientDB(database)
 			ct = clientCT(database, collection)
 			
 			ct.create_index([('gameCode', 1), ('sectionId', 1)])
 			ct.create_index([('gameCode', 1), ('accumulatedTime_sec', 1)])
-
-			if game == 'Maze':
-				maxSection = 40
-			elif game == 'Duck':
-				maxSection = 60
 			
-			peo = 0 #有紀錄的玩家
-			countInsert = 0 #insert的筆數  
 			for section in range(1, maxSection+1):
-				sec_AT = 0          #Total Accumulated Time of the section of all players
-				sec_Peo = 0         #這個關卡的人數
-				sec_MeanT = 0       #這關的平均時間(不論是否過關)
+				peo_all = [] # 有紀錄的玩家
+				peo_pass = [] # 過關的玩家 
+				peo_fail = [] # 沒過關的玩家	
+				log_peo_all, log_peo_pass, log_peo_fail = [], [], []
+				peo_origin_all, peo_origin_pass, peo_origin_fail = [], [], []				
+				
+				meanT, meanT_pass, meanT_fail = None, None, None	# 平均數
+				midT, midT_pass, midT_fail = None, None, None		# 中位數
+				modT, modT_pass, modT_fail = None, None, None		# 眾數
+				maxT, maxT_pass, maxT_fail = None, None, None		# 最大
+				minT, minT_pass, minT_fail = None, None, None		# 最小
+				stdT, stdT_pass, stdT_fail = None, None, None 		# 標準差
+				
 				sta_dict = {}
 				
-				sec_AT_Pass = 0     #Total Accumulated Time of the section of the players who pass the setion
-				sec_Peo_Pass = 0    #這個關卡過關的人數
-				sec_MeanT_Pass = 0       #這關過關的平均時間
-				sta_dict_Pass = {}			
-				
 				for one in ct.find({"gameCode": game, "sectionId":section}):
-					if one['accumulatedTime_sec'] > 0:
-						sec_AT += one['accumulatedTime_sec']
-						sec_Peo += 1 
-						if one['gameStar'] > 0:		# 只算有過關的人
-							sec_AT_Pass += one['accumulatedTime_sec']
-							sec_Peo_Pass += 1
-				
-				if sec_Peo > 0:
-					sec_MeanT = sec_AT / sec_Peo
-					if sec_Peo_Pass > 0:
-						sec_MeanT_Pass = sec_AT / sec_Peo_Pass
-					print("section:%d, 人數:%d, 平均時間:%f, 過關人數:%d, 過關平均時間:%f" %(section, sec_Peo, sec_MeanT, sec_Peo_Pass, sec_MeanT_Pass))
-				
-					sec_DiffSquare = 0 
-					sec_DiffSquare_Pass = 0
-					print("開始計算變異數與標準差")
-					for two in ct.find({"gameCode": game, "sectionId":section}):
-						sec_DiffSquare += (np.square(two['accumulatedTime_sec'] - sec_MeanT))
-						if two['gameStar'] > 0:
-							sec_DiffSquare_Pass += (np.square(two['accumulatedTime_sec'] - sec_MeanT_Pass))
-						
-					sec_Variance = 0
-					sec_Sigma = 0
-					sec_Variance = sec_DiffSquare / (sec_Peo-1)
-					sec_Sigma = np.sqrt(sec_Variance)
+					# 只有計算平均數與標準差才用origin
+					accumulatedTime_sec = int(one['accuTime_sec'])
 					
-					# 算有過關的
-					sec_Variance_Pass = 0
-					sec_Sigma_Pass = 0
-					sec_Variance_Pass = sec_DiffSquare_Pass / (sec_Peo_Pass-1)
-					sec_Sigma_Pass = np.sqrt(sec_Variance_Pass)
+					peo_all.append(accumulatedTime_sec)
+					peo_origin_all.append(one['accuTime_sec'])
+					log_peo_all.append(one['logAccuTime_sec'])
 					
-					print("Variance = ", sec_Variance, "Variance_Pass = ", sec_Variance_Pass)
-					print("Sigma = ", sec_Sigma, "Sigma_Pass = ", sec_Sigma_Pass)
+					if one['gameStar'] > 0:		# 只算有過關
+						peo_pass.append(accumulatedTime_sec)
+						peo_origin_pass.append(one['accuTime_sec'])
+						log_peo_pass.append(one['logAccuTime_sec'])
+					else:		# 只算沒過關
+						peo_fail.append(accumulatedTime_sec)
+						peo_origin_fail.append(one['accuTime_sec'])
+						log_peo_fail.append(one['logAccuTime_sec'])
+				
+				if len(peo_all) > 0:
+					meanT, midT, modT, minT, maxT, stdT = descript_statis(peo_all, peo_origin_all)
+					if len(peo_pass) > 0:
+						meanT_pass, midT_pass, modT_pass, minT_pass, maxT_pass, stdT_pass = descript_statis(peo_pass, peo_origin_pass)
+					if len(peo_fail) > 0:	
+						meanT_fail, midT_fail, modT_fail, minT_fail, maxT_fail, stdT_fail = descript_statis(peo_fail, peo_origin_fail)				
+					
+					print("section:%d, 人數:%d, 平均時間:%f, 中位數時間:%f, 過關人數:%d, 過關平均時間:%f, 過關中位數時間:%f" %(section, len(peo_all), meanT, midT, len(peo_pass), meanT_pass, midT_pass))
+					print("全部標準差 = ", stdT, "過關玩家標準差 = ", stdT_pass)
 
 					print("開始計算Z值\n")
-					logTime_sigma = np.log(sec_Sigma)
-					logsec_MeanT = np.log(sec_MeanT)
+					log_meanT, log_meanT_pass, log_meanT_fail, log_stdT, log_stdT_pass, log_stdT_fail = mean_and_std(log_peo_all, log_peo_pass, log_peo_fail)
+					ZTime, ZTime_pass, ZTime_fail = None, None, None
+					ZLogTime, ZLogTime_pass, ZLogTime_fail = None, None, None
+					Z_dict, Z_pass_dict, Z_fail_dict = {}, {}, {}
 					
-					logTime_sigma_Pass = np.log(sec_Sigma_Pass)
-					logsec_MeanT_Pass = np.log(sec_MeanT_Pass)
-					
-					Z = 999
-					ZLogTime = -999
-					Z_Pass = 999
-					ZLogTime_Pass = -999
-					for three in ct.find({"gameCode":game, "sectionId":section}): 
-						Z = (three['accumulatedTime_sec'] - sec_MeanT) / sec_Sigma
-						ZLogTime = (three['logAccuTime_sec'] - logsec_MeanT) / logTime_sigma
-						Z_dict = {"ZTime":Z,
+					for two in ct.find({"gameCode":game, "sectionId":section}): 
+						ZTime = (two['accuTime_sec'] - meanT) / stdT
+						ZLogTime = (two['logAccuTime_sec'] - log_meanT) / log_stdT
+						Z_dict = {"ZTime":ZTime,
 								  "ZLogTime":ZLogTime
 								 }
-						db.AccuTime.update_one({"_id":three['_id']}, {'$set': Z_dict}, upsert = True)
+						db.AccuTime.update_one({"_id":two['_id']}, {'$set':Z_dict}, upsert = True)
 						countInsert += 1
 						
 						# 有過關
-						if three['gameStar'] > 0:
-							Z_Pass = (three['accumulatedTime_sec'] - sec_MeanT_Pass) / sec_Sigma_Pass
-							ZLogTime_Pass = (three['logAccuTime_sec'] - logsec_MeanT_Pass) / logTime_sigma_Pass
-							Z_dict_Pass = {"ZTime_Pass":Z_Pass,
-										   "ZLogTime_Pass":ZLogTime_Pass
-									 }
-							db.AccuTime.update_one({"_id":three['_id']}, {'$set': Z_dict_Pass}, upsert = True)	
-					
-					sta_dict = {"AccuMeanTime":sec_MeanT,
-								"AccuVariance":sec_Variance,
-								"AccuSigma":sec_Sigma,
-								"AccuMeanTime_Pass":sec_MeanT_Pass,
-								"AccuVariance_Pass":sec_Variance_Pass,
-								"AccuSigma_Pass":sec_Sigma_Pass							
+						if two['gameStar'] > 0:
+							ZTime_pass = (two['accuTime_sec'] - meanT_pass) / stdT_pass
+							ZLogTime_pass = (two['logAccuTime_sec'] - log_meanT_pass) / log_stdT_pass
+							Z_pass_dict = {"ZTime_pass":ZTime_pass,
+										   "ZLogTime_pass":ZLogTime_pass
+										  }
+							db.AccuTime.update_one({"_id":two['_id']}, {'$set': Z_pass_dict}, upsert = True)	
+						else:
+							ZTime_fail = (two['accuTime_sec'] - meanT_fail) / stdT_fail
+							ZLogTime_fail = (two['logAccuTime_sec'] - log_meanT_pass) / log_stdT_pass
+							Z_fail_dict = {"ZTime_fail":ZTime_fail,
+										   "ZLogTime_fail":ZLogTime_fail
+										  }
+							db.AccuTime.update_one({"_id":two['_id']}, {'$set': Z_fail_dict}, upsert = True)
+							
+					sta_dict = {"AccuMeanTime":meanT, "AccuStdTime":stdT, "AccuMidTime":midT, "AccuModTime":float(modT), "AccuMinTime":float(minT), "AccuMaxTime":float(maxT),	
+								"AccuMeanTime_pass":meanT_pass, "AccuStdTime_Pass":stdT_pass, "AccuMidTime_Pass":midT_pass,
+								"AccuModTime_pass":float(modT_pass), "AccuMinTime_Pass":float(minT_pass), "AccuMaxTime_Pass":float(maxT_pass),
+								"AccuMeanTime_fail":meanT_fail, "AccuStdTime_Fail":stdT_fail, "AccuMidTime_Fail":midT_fail, 
+								"AccuModTime_fail":float(modT_fail), "AccuMinTime_Fail":float(minT_fail), "AccuMaxTime_Fail":float(maxT_fail),		
 							   }
+					for items in sta_dict.items():
+						#print(items)
+						if isinstance(items[1], np.int32):
+							print(items[0])
+							s =input("")		   
 					db.Sec_sta.update_one({"gameCode":game, "sectionId":section}, {'$set': sta_dict}, upsert = True)
 						
-		elif(step == 2):
-			###Second:Insert Elo
-			startTime = time.time()
-			database = 'dotCode'
+		elif(step == 2):	# Insert Elo
 			collection = 'PeoElo'
-
-			db = clientDB(database)
 			ct = clientCT(database, collection)
 
 			ct.create_index([('gameCode', 1), ('userId', 1)])
 			db.AccuTime.create_index([('gameCode', 1), ('userId', 1), ('sectionId', 1)])
 			
-			if game == 'Maze':
-				maxSection = 40
-			elif game == 'Duck':
-				maxSection = 60
-
-			countInsert = 0
 			print("Insert Elo to AccuTime...")
-			for id in range(1, 679000):
+			for id in range(1, maxId):
 				for four in ct.find({"gameCode":game, "userId":id}):
 					for section in range(1, maxSection+1):
 						if(section > four['maxSection']):
@@ -709,182 +638,111 @@ if __name__ == '__main__':
 							else: 
 								pass
 
-	##value = 4
-	if(value == 4):
-		print("Calculate Z of score and the first game time and log game time\n：")    
-		step = int(input("(1)Insert Score\n(2)Calaulate Z of game time, log game time and score\n(3)Inspect empty of Z-Score, Z-Time, Z-LogTime\n："))
+	
+	if(value == 4):	# 計算 FirstRecord 中 gameTime 及Log gameTime 的Z值   
+		step = int(input("(1)Insert Score\n(2)Calaulate Z of game time, log game time\n(3)Inspect empty of Z-Score, Z-Time, Z-LogTime\n："))
 		
-		##計算FirstRecord中score與Time及Log Time的Z值
-		startTime = time.time()
 		database = 'dotCode'
 		collection = 'FirstRecord'
-
-		db = clientDB(database)
 		ct = clientCT(database, collection)
+		
 		ct.create_index([('gameCode', 1), ('sectionId', 1)])
 
-		print("連接資料庫:%s - collection:%s" %(database, collection))
-		countInsert = 0
-		
-		if step == 1:
-			# 插入score, Score的計算方式是官方的計算方式, 詳情見官方說明書
-			if game == 'Maze':
-				maxSection = 40
-			elif game == 'Duck':
-				maxSection = 60
-
-			print("start to insert %s score..." %game)
+		if step == 1:	# 插入score, Score的計算方式是官方的計算方式, 詳情見官方說明書
 			for one in ct.find({"gameCode":game}):
-				dict_score = {"score":(one['sectionId']+9) * one['gameStar']}
-				db.FirstRecord.update_one({'_id':one['_id']}, {'$set': dict_score}, upsert = True)
+				score_dict = {"score":(one['sectionId']+9) * one['gameStar']}
+				db.FirstRecord.update_one({'_id':one['_id']}, {'$set': score_dict}, upsert = True)
 				countInsert += 1
 		
-		elif step == 2:
-			# 計算 Mean Score與Mean Time, gameTime已經是除錯過的
-			if game == 'Maze':
-				maxSection = 40
-			elif game == 'Duck':
-				maxSection = 60			
-			
+		elif step == 2:		# 各種敘述性統計資料 (gameTime已經是除錯過的)
+			print("計算各種敘述性統計資料 (gameTime已經是除錯過的)")
 			for section in range(1, maxSection+1):
-				print("start to calculate Z of section %d " %section) 
-				sec_AS = 0
-				sec_AT = 0
-				sec_Peo = 0
-				sec_MeanS = 0
-				sec_MeanT = 0
-				sta_dict = {}
-
-				sec_AS_Pass = 0
-				sec_AT_Pass = 0
-				sec_Peo_Pass = 0
-				sec_MeanS_Pass = 0
-				sec_MeanT_Pass = 0
-				sta_dict_Pass = {}
-
-				print("開始計算 mean score與 mean time")
-				for one in ct.find({"gameCode":game, "sectionId":section}):
-					sec_AS += one['score']
-					sec_AT += one['gameTime']/1000
-					sec_Peo += 1
-					if one['gameStar'] > 0:
-						sec_AS_Pass += one['score']
-						sec_AT_Pass += one['gameTime']/1000
-						sec_Peo_Pass += 1	
+				peo_all, peo_pass, peo_fail = []
+				log_peo_all, log_peo_pass, log_peo_fail = []
 				
-				if sec_Peo > 0:
-					sec_MeanS = sec_AS / sec_Peo
-					sec_MeanT = sec_AT / sec_Peo
-					if sec_Peo_Pass > 0:
-						sec_MeanS_Pass = sec_AS_Pass / sec_Peo_Pass
-						sec_MeanT_Pass = sec_AT_Pass / sec_Peo_Pass					
+				meanT, meanT_pass, meanT_fail = None	# 平均數
+				midT, midT_pass, midT_fail = None		# 中位數
+				modT, modT_pass, modT_fail = None		# 眾數
+				maxT, maxT_pass, maxT_fail = None		# 最大
+				minT, minT_pass, minT_fail = None		# 最小
+				stdT, stdT_pass, stdT_fail = None 		# 標準差				
+				
+				sta_dict = {}
+				
+				for one in ct.find({"gameCode":game, "sectionId":section}):
+					peo_all.append(one['gameTime_sec'])
+					log_peo_all.append(one['logGameTime_sec'])
+					if one['gameStar'] > 0:
+						peo_pass.append(one['gameTime_sec'])
+						log_peo_pass.append(one['logGameTime_sec'])
+					else:
+						peo_fail.append(one['gameTime_sec'])
+						log_peo_fail.append(one['logGameTime_sec'])
+				
+				if len(peo_all) > 0:
+					meanT, midT, modT, minT, maxT, stdT = descript_statis(peo_all, peo_origin_all)
+					if len(peo_pass) > 0:
+						meanT_pass, midT_pass, modT_pass, minT_pass, maxT_pass, stdT_pass = descript_statis(peo_pass, peo_origin_pass)
+					if len(peo_fail) > 0:	
+						meanT_fail, midT_fail, modT_fail, minT_fail, maxT_fail, stdT_fail = descript_statis(peo_fail, peo_origin_fail)				
+					print("section:%d, 人數:%d, 平均時間:%f, 過關人數:%d, 過關平均時間:%f" %(section, len(peo_all), meanT, len(peo_pass), meanT_pass))
 					
-					print("section:%d, 人數:%d, 平均時間:%f, 過關人數:%d, 過關平均時間:%f" %(section, sec_Peo, sec_MeanT, sec_Peo_Pass, sec_MeanT_Pass))
+					# ZTime值
+					ZTime, ZTime_pass, ZTime_fail = 999
+					ZLogTime, ZLogTime_pass, ZLogTime_fail = -999
+					Z_dict, Z_pass_dict, Z_fail_dict = {}
+					log_meanT, log_meanT_pass, log_meanT_fail, log_stdT, log_stdT_pass, log_stdT_fail = mean_and_std(log_peo_all, log_peo_pass, log_peo_fail)
 					
-					print("開始計算變異數與標準差")
-					score_diffSquare = 0
-					time_diffSquare = 0	
-					score_variance = 0
-					score_sigma = 0
-					
-					score_diffSquare_Pass = 0
-					time_diffSquare_Pass = 0
-					score_variance_Pass = 0
-					score_sigma_Pass = 0	
-					
-					for two in ct.find({"gameCode": game, "sectionId":section}):
-						score_diffSquare += np.square(two['score'] - sec_MeanS)
-						time_diffSquare += np.square(two['gameTime']/1000 - sec_MeanT)
-						if two['gameStar'] > 0:
-							score_diffSquare_Pass += np.square(two['score']- sec_MeanS_Pass)
-							time_diffSquare_Pass += np.square(two['gameTime']/1000 - sec_MeanT_Pass)						
-					
-					score_variance = score_diffSquare / (sec_Peo-1)
-					score_sigma = np.sqrt(score_variance)					
-					
-					score_variance_Pass = score_diffSquare_Pass / (sec_Peo_Pass-1)    
-					score_sigma_Pass = np.sqrt(score_variance_Pass)
-		
-					time_variance = time_diffSquare / (sec_Peo-1)
-					time_sigma = np.sqrt(time_variance)					
-		
-					time_variance_Pass = time_diffSquare_Pass / (sec_Peo_Pass-1)
-					time_sigma_Pass = np.sqrt(time_variance_Pass)
-					
-					print("Time Variance = ", time_variance, "Sigma = ", time_sigma)
-					print("Time Variance_Pass = ", time_variance_Pass, "Sigma_Pass = ", time_sigma_Pass)
-		
-					logTime_sigma = np.log(time_sigma)
-					logsec_MeanT = np.log(sec_MeanT)
-					
-					logTime_sigma_Pass = np.log(time_sigma_Pass)
-					logsec_MeanT_Pass = np.log(sec_MeanT_Pass)
-					
-					# 插ZScore與ZTime值
-					ZS = 0
-					ZT = 0
-					Z_logTime = 0
-					
-					ZS_Pass = None
-					ZT_Pass = None
-					Z_logTime_Pass = None
-					
-					Z_dict = {}
 					print("開始計算Z值\n")
-					for three in ct.find({"gameCode": game, "sectionId":section}):
-						ZS = (three['score'] - sec_MeanS)/score_sigma
-						ZT = ((three['gameTime']/1000) - sec_MeanT)/time_sigma
-						Z_logTime = (three['logTime_sec'] - logsec_MeanT) / logTime_sigma
-						Z_dict = {"ZScore":ZS,
-								  "ZTime":ZT,
-								  "ZLogTime":Z_logTime
+					for two in ct.find({"gameCode": game, "sectionId":section}):
+						ZTime = (two['gameTime_sec'] - meanT) / stdT
+						ZLogTime = (two['logGameTime_sec'] - log_meanT) / log_stdT
+						Z_dict = {"ZTime":ZTime,
+								  "ZLogTime":ZLogTime
 								 }
-						db.FirstRecord.update_one({'_id':three['_id']},{'$set':Z_dict}, upsert = True)
+						db.FirstRecord.update_one({'_id':two['_id']},{'$set':Z_dict}, upsert = True)
 						countInsert += 1			
-						# 只算過關
-						if three['gameStar'] > 0:
-							ZS_Pass = (three['score'] - sec_MeanS_Pass)/score_sigma_Pass
-							ZT_Pass = ((three['gameTime']/1000) - sec_MeanT_Pass)/time_sigma_Pass
-							Z_logTime_Pass = (three['logTime_sec'] - logsec_MeanT_Pass) / logTime_sigma_Pass
-							Z_dict_Pass = {"ZScore_Pass":ZS_Pass,
-										   "ZTime_Pass":ZT_Pass,
-										   "ZLogTime_Pass":Z_logTime_Pass
-										  }					
-							db.FirstRecord.update_one({'_id':three['_id']},{'$set':Z_dict_Pass}, upsert = True)					
 						
-					sta_dict = {"FirstMeanTime":sec_MeanT,
-								"FirstVariance":time_variance,
-								"FirstSigma":time_sigma,
-								"FirstMeanTime_Pass":sec_MeanT_Pass,
-								"FirstVariance_Pass":time_variance_Pass,
-								"FirstSigma_Pass":time_sigma_Pass
-							   }
+						# 有過關
+						if two['gameStar'] > 0:
+							ZTime_pass = (two['gameTime_sec'] - meanT_pass) / stdT_pass
+							ZLogTime_pass = (two['logGameTime_sec'] - log_meanT_pass) / log_stdT_pass
+							Z_pass_dict = {"ZTime_pass":ZTime_pass,
+										   "ZLogTime_pass":ZLogTime_pass
+										  }					
+							db.FirstRecord.update_one({'_id':two['_id']},{'$set':Z_pass_dict}, upsert = True)					
+						else:
+							ZTime_fail = (two['gameTime_sec'] - meanT_fail) / stdT_fail
+							ZLogTime_fail = (two['logGameTime_sec'] - log_meanT_fail) / log_stdT_fail
+							Z_fail_dict = {"ZTime_fail":ZTime_fail,
+										   "ZLogTime_fail":ZLogTime_fail
+										  }
+							db.FirstRecord.update_one({"_id":two['_id']}, {'$set': Z_fail_dict}, upsert = True)
+								
+					sta_dict = {"FirstMeanTime":meanT, "FirstStdTime":stdT, "FirstMidTime":midT, "FirstModTime":modT, "FirstMinTime":minT, "FirstMaxTime":maxT,	
+								"FirstMeanTime_pass":meanT_pass, "FirstStdTime_Pass":stdT_pass, "FirstMidTime_Pass":midT_pass,
+								"FirstModTime_pass":modT_pass, "FirstMinTime_Pass":minT_pass, "FirstMaxTime_Pass":maxT_pass,
+								"FirstMeanTime_fail":meanT_fail, "FirstStdTime_Fail":stdT_fail, "FirstMidTime_Fail":midT_fail, 
+								"FirstModTime_fail":modT_fail, "FirstMinTime_Fail":minT_fail, "FirstMaxTime_Fail":maxT_fail}	
 					db.Sec_sta.update_one({"gameCode":game, "sectionId":section}, {'$set':sta_dict}, upsert = True)		   
 		
-		elif step == 3:
-			###檢查Z值是否NULL
+		elif step == 3:	# 檢查Z值是否NULL
 			ct.create_index([('ZTime', 1)])
-			ct.create_index([('ZScore', 1)])
 			ct.create_index([('ZLogTime', 1)])
 			for three in ct.find():
-				if(three['ZTime'] not in three.keys() or three['ZScore'] not in three.keys() or three['ZLogTime'] not in three.keys()):
+				if(three['ZTime'] not in three.keys() or three['ZLogTime'] not in three.keys()):
 					print("lack key", three.keys())
 
 
-	##value = 7
-	if (value == 7):
-	##Insert section statistic information(Sec_sta)
+	if (value == 7):	# Insert section statistic information(Sec_sta)
 		step = int(input("""1.amount of people of get how many stars in every section
-	2.base on the 30th of spent time until pass the section to calculate mutiple of use time of every sections
-	3.Degree of difficulty of every sections\n:"""))
-		startTime = time.time()
-
-		#Connect to database    
-		connection = MongoClient('localhost', 27017)
+2.base on the 30th of spent time until pass the section to calculate mutiple of use time of every sections
+3.Degree of difficulty of every sections\n:"""))   
+		#connection = MongoClient('localhost', 27017)
 		#print(connection.list_database_names())  #Return a list of db, equal to: > show dbs
-		db = connection["dotCode"]
-		print(db.list_collection_names())        #Return a list of collections in 'testdb1'
-
+		#print(db.list_collection_names())        #Return a list of collections in 'testdb1'
+		database = 'dotCode'
+		db = clientDB(database)
 		if step == 1:
 			if 'Sec_sta' in db.list_collection_names():   # Check if collection "posts"
 				collection = db['Sec_sta']
@@ -892,29 +750,14 @@ if __name__ == '__main__':
 				#collection.drop()	# Delete(drop) collection named 'posts' from db
 				#print("drop collection %s" %str(collection))
 			
-			#Connect to database
-			database = 'dotCode'
 			collection = 'AccuTime'
-			
-			db = clientDB(database)
 			ct = clientCT(database, collection)
-			if game == 'Maze':
-				maxSection = 40
-			elif game == 'Duck':
-				maxSection = 60
 			
 			for section in range(1, maxSection+1):
 				print("collcting data of %s section %d..." %(game, section))
-				correctPercentage = 0
-				sectionTime = 0
-				zeroStar = 0
-				oneStar = 0
-				twoStar = 0
-				threeStar = 0
-				fourStar = 0
-				totalSectionCorrect = 0
-				totalSectionTime = 0
-				people = 0
+				correctPercentage, totalSectionCorrect = 0, 0
+				zeroStar, oneStar, twoStar, threeStar, fourStar = 0, 0, 0, 0, 0
+				peo = 0 # 因為要算每關人數, 所以要重置為0
 				for one in ct.find({"gameCode": game, "sectionId" : section}):
 					if(one['gameStar'] == 0):
 						zeroStar += 1
@@ -927,37 +770,28 @@ if __name__ == '__main__':
 					elif(one['gameStar'] == 4):
 						fourStar += 1
 					totalSectionCorrect += (one['correctPercentage'])
-					totalSectionTime += (one['accumulatedTime_sec'])
-					people += 1
+					peo += 1
 				
-				if people > 0:
-					correctPercentage = totalSectionCorrect/people
-					avgTime = totalSectionTime/people
-
+				if peo > 0:
+					correctPercentage = totalSectionCorrect/peo
 					section_dict =  {"gameCode" : game,
 									 "sectionId" : section,
+									 "peo" : peo,
+									 "peo_pass" :oneStar+twoStar+threeStar+fourStar,
 									 "zeroStar" : zeroStar,
 									 "oneStar" : oneStar,
 									 "twoStar" : twoStar,
 									 "threeStar" : threeStar,
 									 "fourStar" : fourStar,
-									 "correctPercentage" : correctPercentage,
-									 "avgTime_sec" : avgTime
+									 "correctPercentage" : correctPercentage
 									}
 					db.Sec_sta.update_one({'gameCode':game, 'sectionId':section},{'$set': section_dict}, upsert = True)
 					countInsert += 1
 
 		elif step == 2:
-			database = 'dotCode'
 			collection = 'Sec_sta'
-			
 			ct = clientCT(database, collection)
-			
-			if game == 'Maze':
-				maxSection = 40
-			elif game == 'Duck':
-				maxSection = 60
-				
+		
 			time_List = []
 			ntime_List = []
 			base = 0
@@ -981,17 +815,10 @@ if __name__ == '__main__':
 					db.Sec_sta.update_one({'_id':three['_id']}, {'$set': times_dict}, upsert = True)
 					countInsert += 1
 
-		elif step== 3:
-			##區分關卡難度等級    
-			database = 'dotCode'
+		elif step== 3:	#區分關卡難度等級 
 			collection = 'Sec_sta'
 			db = clientDB(database)
 			ct = clientCT(database, collection)
-
-			if game == 'Maze':
-				maxSection = 40
-			elif game == 'Duck':
-				maxSection = 60
 
 			item_difficulty = 0
 			count = 0
@@ -1040,11 +867,9 @@ if __name__ == '__main__':
 		print('''修改或刪除資料前, 先刪除該與該資料或欄位相關的index可大幅加快速度, 避免硬碟寫入滿載, 因修改或刪除資料必須重新排序index''')
 		choice = int(input("(1)delete data\n(2)update data\n(3)count data\n："))
 		startTime = time.time()
+		database = 'dotCode'
 		if choice == 1:
-			database = 'dotCode'
 			collection = 'Record'
-
-			db = clientDB(database)
 			ct = clientCT(database, collection)
 			
 			print("delete %s data" %collection)
@@ -1057,24 +882,30 @@ if __name__ == '__main__':
 			print(x.deleted_count, "documents deleted.")
 		
 		elif choice == 2:
-			startTime = time.time()
-			
-			database = 'dotCode'
-			collection = 'Record'
-
-			db = clientDB(database)
+			collection = 'AccuTime'
 			ct = clientCT(database, collection)
 			
-			
-			# 刪除某個欄位
+			'''
+			# 刪除欄位
 			print("unset %s data" %collection)
 			unset_dict = {'logTime_sec':''}
 			x = ct.update_many({"gameCode":"Duck"}, {'$unset':unset_dict}, upsert=False)
 			#x = ct.update_many({}, {'$unset':{"accumulatedTime":''}}, upsert=False)
 			print(x.modified_count, "documents modified.")
+			'''
+			
+			# 修改欄位
+			print("unset %s data" %collection)
+			for one in ct.find({"gameCode":"Duck"}):
+				wrongTime_sec = one['accuTime_sec']-one['GameTime_sec'] if one['gameStar'] > 0 else one['accuTime_sec'],
+				modify_dict = {'wrongTime_sec' : wrongTime_sec, 
+							   'logwrongTime_sec' : float(np.log(wrongTime_sec))
+							  }
+			x = ct.update_one({"gameCode":"Duck"}, {'$set':modify_dict}, upsert=True)
+			print(x.modified_count, "documents modified.")
 			
 			'''
-			# 增加某個欄位
+			# 增加欄位
 			print("upsert data")
 			for one in ct.find({"gameCode":"Duck"}): 
 				update_dict = {"logTime_sec":np.log(one['gameTime']/1000)}
@@ -1096,34 +927,26 @@ if __name__ == '__main__':
 				if i != j:
 					print(i, j)
 			'''	
-			endTime = time.time()
+		
 		elif choice == 3:	
-			print("count data")
-			database = 'dotCode'
 			collection = 'Record'
-
-			db = clientDB(database)
 			ct = clientCT(database, collection)
 			#db.AccuTime.aggregate([{$match:{gameCode:'Duck', accumulatedTime_sec:{'$lt':10}, gameStar:{'$gt':0}}},{$count: "count"}])
 			#db.collection.aggregate([{$group:{sectionId:1, myCount:{$sum:1}}},{$project:{_id:0}}])
-			peo = 0
+			print("count data")
 			newsection = 0
-			section_count = columnFunc(0, 62, 0)
+			section_count = columnFunc(0, maxSection, 0)
 			for one in ct.find({"gameCode":"Duck", "newGameTime":{"$gte":0}}):
-				if one['sectionId'] > 60:
-					newsection = 0
-				else:
-					newsection = one['sectionId']
+				newsection = 0 if one['sectionId'] > 60 else one['sectionId']
 				section_count[newsection] += 1		
 			peo += 1
 			
-			for i, record in zip(range(0, 62), section_count):
+			for i, record in zip(range(0, maxSection), section_count):
 				print(i, record, "\n")
-				
 				
 	endTime = time.time()
 	passTime = (endTime - startTime)
-
-	print("total inserted data:", countInsert)
+	#tran_startTime = datetime.datetime.fromtimestamp(startTime).strftime("%Y-%m-%d %H:%M:%S")
+	#tran_endTime = datetime.datetime.fromtimestamp(endTime).strftime("%Y-%m-%d %H:%M:%S")		
+	print("total inserted data:", countInsert, "列入紀錄總人數:", peo)
 	print("執行時間", passTime, "秒")
-	print("列入紀錄總數:", peo)
