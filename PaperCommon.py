@@ -1,3 +1,8 @@
+'''
+Created
+@author: Y.J.Weng
+'''
+
 from pymongo import MongoClient
 import pymongo
 import traceback
@@ -11,8 +16,14 @@ import copy
 import codecs
 
 
-def clientDB(database):
-	client = MongoClient()
+def clientDB(database, host='localhost', port=27017):
+	#connection = MongoClient('localhost', 27017)
+	#print(connection.list_database_names())  #Return a list of db, equal to: > show dbs
+	#print(db.list_collection_names())        #Return a list of collections in 'testdb1'
+	#collection.drop()	# Delete(drop) collection named 'posts' from db
+	#print("drop collection %s" %str(collection))
+
+	client = MongoClient(host, port)
 	db = client[database]
 	return db
 
@@ -23,34 +34,68 @@ def clientCT(database, collection):
 	return ct
 
 
-def find_maxSection(game='Duck'):	
-	return 40 if game == 'Maze' else 60
+def max_section(game='Duck', database='dotCode', collection='Record'):	
+	ct = clientCT(database, collection)
+	ct.create_index([('gameCode', 1), ('sectionId', 1)])
+	for one in ct.find({"gameCode":game}).sort([("sectionId", -1)]).limit(1):
+		#print(one['sectionId'])
+		maxSection = one['sectionId']
+	return maxSection
 
 
-def max_user(game='Duck'):
-	return 679000 if game == 'Duck' else 679000
+def max_user(game='Duck', database='dotCode', collection='Record'):
+	ct = clientCT(database, collection)
+	ct.create_index([('gameCode', 1), ('userId', 1)])
+	for one in ct.find({"gameCode":game}).sort([("userId", -1)]).limit(1):
+		#print(one['userId'])
+		maxUserId = one["userId"]
+	return maxUserId
 
 
 def	players_degrees():
 	return ['Low', 'High']
 
 
-def sections_degrees():
-	return ['Very Simple', 'Simple', 'Medium', 'Hard', 'Very Hard']
+def sections_degrees(difficultyDegreeKey, game='Duck'):
+	maxSection = find_maxSection()
+	ct = clientCT('dotCode', 'Sec_sta')
+	sectionDegrees = []
+	for section in range(0, maxSection+1):
+		for one in ct.find({"sectionId":section}):
+			sectionDegrees.append(one[difficultyDegreeKey])
+	return 	sectionDegrees
+
+
+def elo_degrees():
+	ct = clientCT('dotCode', 'Sec_sta')
+	for one in ct.find({"gameCode":'Duck'}).sort([("difficultyDegree_kmeans", -1)]).limit(1):
+		maxDifficulty = one["difficultyDegree_kmeans"]
+	if maxDifficulty == 3:
+		return ['Simple', 'Normal', 'Hard']
+	elif maxDifficulty == 4:
+		return ['Very Simple', 'Simple', 'Normal', 'Hard', 'Very Hard']
+	elif maxDifficulty == 5:
+		return ['Very Simple', 'Simple', 'Normal', 'Hard', 'Very Hard', 'Unbelievable Hard']
 
 
 def stars_legends():
 	return ['0star', '★', '★★', '★★★', '★★★★']
 	
 
-def color_degrees():
-	return ['blue', 'skyblue', 'yellow', 'orange', 'red']
+def color_degrees(degrees=5):
+	if degrees == 5:
+		return ['blue', 'skyblue', 'yellow', 'orange', 'red']
+	elif degrees == 7:
+		return ['springgreen', 'blue', 'skyblue', 'white', 'yellow', 'orange', 'red']	
 
 
 def add_difficulty(game, difficultySeq):
 	ct = clientCT('dotCode', 'Sec_sta')
+	
 	maxSection = find_maxSection(game)
-	item_difficulty, difficulty_degree, sections = [], [], []
+	
+	itemDifficulty, difficultyDegree, sections = [], [], []
+	
 	if difficultySeq == '2':
 		eloDiffcultyColumn = 'elo2_difficulty'
 		elodifficultyDegreeColumn = 'difficultyDegree2'
@@ -60,18 +105,18 @@ def add_difficulty(game, difficultySeq):
 	else:
 		if difficultySeq not in ('1', '2', '3'):
 			print("沒有這個選項, 我幫你選elo1")
-		eloDiffcultyColumn = 'elo_difficulty'
+		eloDiffcultyColumn = 'difficulty_01'
 		eloDifficultyDegreeColumn = 'difficultyDegree_kmeans'
 		
 	for section in range(1, maxSection+1):
 		for one in ct.find({'gameCode': game, 'sectionId':section}):
 			try:
 				sections.append(one['sectionId'])
-				item_difficulty.append(one[eloDiffcultyColumn])
-				difficulty_degree.append(one[eloDifficultyDegreeColumn])
+				itemDifficulty.append(one[eloDiffcultyColumn])
+				difficultyDegree.append(one[eloDifficultyDegreeColumn])
 			except:
 				traceback.print_exc()
-	return sections, item_difficulty, difficulty_degree
+	return sections, itemDifficulty, difficultyDegree
 
 
 def bubbleSort(x):
@@ -102,8 +147,8 @@ def bubbleSort_twoLayer(x, y=0):	#大的往後排
 			j += 1
 		i -= 1
 	return x
+			
 	
-
 def choose_collection(database='dotCode'):
 	db = clientDB(database)
 	collections = db.list_collection_names()
@@ -113,6 +158,19 @@ def choose_collection(database='dotCode'):
 	choice = int(input('請選擇collection：'))
 	return collections[choice-1]
 
+
+def choose_database(host='localhost', port=27017):
+	connection = MongoClient(host, port)
+	databases = connection.list_database_names()  #Return a list of db, equal to: > show dbs
+	if databases is None:
+		return 'dotCode'
+	else:
+		for d in enumerate(databases):
+			print("({}){}".format(d[0]+1, d[1]))
+		dbChoice = int(input("請選擇資料庫："))
+		database = databases[dbChoice-1]
+		return database
+		
 	
 def collect_data(collection, query, keys, database='dotCode'):
 	'''	keys are the columns we want, and should be a list.'''
@@ -181,8 +239,8 @@ def csv_to_json(path):
 def follow_sort(x, seq):
 	new_x = []
 	for i in seq:
-		new_x.append(x[i]) 
-	#print(new_x)	
+		new_x.append(x[i])
+	#print(new_x)
 	return new_x
 
 
@@ -342,7 +400,7 @@ def merge_sort(array, y, print_array=False):
 	
 
 def pass_time(startTime, endTime):
-	print(endTime - startTime, "\n")	
+	print("used time {:.2f} 秒\n".format(endTime - startTime))	
 	
 	
 def read_csv(filePath, fileName, columnName='all'):
@@ -393,7 +451,7 @@ def to_vids_time(time_sec):
 
 def write_log(recordPath, fileName, *massage):
 	try:
-		create_filepath(recordPath)
+		create_path(recordPath)
 		file = os.path.join(recordPath, fileName) 	
 		fout2 = open(file, "a+") # a:只可寫不可讀, a+:可讀寫
 	except:
@@ -412,28 +470,3 @@ def write_dict(**kwargs):
 		#print(key, item)
 		for k, v in item.items():
 			print('k={}, v={}'.format(k,v))
-	
-
-def temp():
-	ct = clientCT('dotCode', 'FirstRecord')
-	for section in range(1, 61):
-		total = 0
-		percent_list = []
-		degree_list = create_lists(-3, 3, x=0)
-		for one in ct.find({"sectionId":section}):
-			degree_list[one['stuEloDegree']+3] += 1
-		total = sum(degree_list)
-		for a in degree_list:
-			percent = round(a / total, 2)
-			percent_list.append(str(percent*100)+"%")
-		print(degree_list, "   ", percent_list)	
-
-
-
-#connection = MongoClient('localhost', 27017)
-#print(connection.list_database_names())  #Return a list of db, equal to: > show dbs
-#print(db.list_collection_names())        #Return a list of collections in 'testdb1'
-#collection.drop()	# Delete(drop) collection named 'posts' from db
-#print("drop collection %s" %str(collection))
-if __name__ == '__main__':
-	get_max_value('FirstRecordLog_sta', 'seconds_log', database='dotCode')
