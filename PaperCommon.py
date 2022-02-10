@@ -52,7 +52,7 @@ def max_user(game='Duck', database='dotCode', collection='Record'):
 	return maxUserId
 
 
-def	players_degrees():
+def players_degrees():
 	return ['Low', 'High']
 
 
